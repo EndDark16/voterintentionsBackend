@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Literal
+from typing import List, Literal, Optional
 import sys
 import os
 
 import joblib
+import numpy as np
 import pandas as pd
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -95,8 +96,16 @@ class VoterFeatures(BaseModel):
     ]
 
 
+class CandidateProbability(BaseModel):
+    candidate: str
+    probability: float
+
+
 class PredictionResponse(BaseModel):
     intended_vote: str
+    confidence: float
+    runner_up: Optional[CandidateProbability]
+    top_candidates: List[CandidateProbability]
     confidence_note: str
 
 
@@ -124,12 +133,24 @@ def healthcheck() -> dict:
 def predict_intention(features: VoterFeatures):
     try:
         payload = pd.DataFrame([features.model_dump()])
-        encoded_prediction = PIPELINE.predict(payload)[0]
-        prediction = LABEL_ENCODER.inverse_transform([encoded_prediction])[0]
+        probabilities = PIPELINE.predict_proba(payload)[0]
+        classes = LABEL_ENCODER.classes_
+        ordering = np.argsort(probabilities)[::-1]
+        top_candidates = [
+            CandidateProbability(candidate=classes[idx], probability=float(probabilities[idx]))
+            for idx in ordering[:5]
+        ]
+        best_idx = ordering[0]
+        prediction = classes[best_idx]
+        runner_up = top_candidates[1] if len(top_candidates) > 1 else None
     except Exception as exc:  # pragma: no cover - FastAPI surfaces the error
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    msg = (
-        "KNN no provee probabilidades calibradas; considere complementar con encuestas."
+    msg = "Recuerda complementar este resultado con trabajo de campo y encuestas cualitativas."
+    return PredictionResponse(
+        intended_vote=prediction,
+        confidence=float(probabilities[best_idx]),
+        runner_up=runner_up,
+        top_candidates=top_candidates,
+        confidence_note=msg,
     )
-    return PredictionResponse(intended_vote=prediction, confidence_note=msg)
