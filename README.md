@@ -1,4 +1,12 @@
-﻿# Voter Intentions API
+﻿<!-- technical-overview: EndDark16/voterintentionsBackend -->
+
+**Introduccion tecnica**
+
+Servicio REST de inferencia con FastAPI para el modelo KNN de intencion de voto. Carga el pipeline serializado y sus transformadores, valida solicitudes con Pydantic y permite configurar CORS para integraciones externas.
+
+---
+
+# Voter Intentions API
 
 FastAPI + scikit-learn inference service for the KNN voter intention model.
 
